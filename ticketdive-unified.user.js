@@ -19,6 +19,7 @@
       debug: true,
       startDate: '',
       startTime: '',
+      testMode: false,
     },
     event: {
       ticketCount: 1,
@@ -241,6 +242,7 @@
       common: {
         startDate: CONFIG.common.startDate,
         startTime: CONFIG.common.startTime,
+        testMode: CONFIG.common.testMode,
       },
       event: {
         ticketCount: CONFIG.event.ticketCount,
@@ -269,15 +271,16 @@
       common: (() => {
         const rawDate = String(commonSrc.startDate ?? '').trim();
         const rawTime = String(commonSrc.startTime ?? '').trim();
+        const testMode = toBool(commonSrc.testMode, false);
         const legacy = String(commonSrc.startAt ?? '').trim();
-        if (!legacy) return { startDate: rawDate, startTime: rawTime };
-        if (rawDate || rawTime) return { startDate: rawDate, startTime: rawTime };
+        if (!legacy) return { startDate: rawDate, startTime: rawTime, testMode };
+        if (rawDate || rawTime) return { startDate: rawDate, startTime: rawTime, testMode };
         const normalized = legacy.replace('T', ' ').replace(/\//g, '-');
         const m = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}(?::\d{2})?)$/);
-        if (m) return { startDate: m[1], startTime: m[2] };
+        if (m) return { startDate: m[1], startTime: m[2], testMode };
         const t = normalized.match(/^(\d{1,2}:\d{2}(?::\d{2})?)$/);
-        if (t) return { startDate: '', startTime: t[1] };
-        return { startDate: rawDate, startTime: rawTime };
+        if (t) return { startDate: '', startTime: t[1], testMode };
+        return { startDate: rawDate, startTime: rawTime, testMode };
       })(),
       event: {
         ticketCount: toInt(eventSrc.ticketCount, 1, 1, 10),
@@ -301,6 +304,7 @@
 
     CONFIG.common.startDate = normalized.common.startDate;
     CONFIG.common.startTime = normalized.common.startTime;
+    CONFIG.common.testMode = normalized.common.testMode;
     CONFIG.event.ticketCount = normalized.event.ticketCount;
     CONFIG.event.autoClick = normalized.event.autoClick;
     CONFIG.event.waitMs = normalized.event.waitMs;
@@ -454,6 +458,7 @@
     addField('apply.firstName', 'firstName value', 'text', inputSection);
     addField('apply.phoneNumber', 'phoneNumber value', 'text', inputSection);
     addField('apply.autoSubmit', 'autoSubmit', 'checkbox', inputSection);
+    addField('common.testMode', 'testMode (クリック操作を全スキップ)', 'checkbox', inputSection);
 
     addField('common.startDate', 'startDate (YYYY-MM-DD)', 'date', delaySection);
     addField('common.startTime', 'startTime (HH:mm:ss)', 'time', delaySection);
@@ -479,8 +484,20 @@
     reloadBtn.style.padding = '8px';
     reloadBtn.style.cursor = 'pointer';
 
+    const testRunBtn = document.createElement('button');
+    testRunBtn.type = 'button';
+    testRunBtn.textContent = '▶ Test Run';
+    testRunBtn.style.flex = '1';
+    testRunBtn.style.padding = '8px';
+    testRunBtn.style.cursor = 'pointer';
+    testRunBtn.style.background = '#1e90ff';
+    testRunBtn.style.color = '#fff';
+    testRunBtn.style.border = '0';
+    testRunBtn.style.borderRadius = '4px';
+
     controls.appendChild(saveBtn);
     controls.appendChild(reloadBtn);
+    controls.appendChild(testRunBtn);
     panel.appendChild(controls);
 
     const status = document.createElement('div');
@@ -565,6 +582,12 @@
       applySettingsToConfig(saved);
       readFromConfigToPanel();
       status.textContent = 'reloaded from storage';
+    });
+
+    testRunBtn.addEventListener('click', () => {
+      panel.style.display = 'none';
+      status.textContent = `test run: ${new Date().toLocaleString()}`;
+      runRouter();
     });
 
     root.appendChild(toggle);
@@ -785,8 +808,15 @@
       return;
     }
 
+    if (CONFIG.common.testMode) {
+      step.skip('5', 'testMode: apply button click skipped');
+      log.warn('⑤ [testMode] 申し込みボタンのクリックをスキップします');
+      step.done('event flow completed in testMode');
+      return;
+    }
+
     btnEl.click();
-    log.dim('sanitized');
+    log.ok('⑥ 申し込みボタンをクリックしました ✅');
     step.ok('5', 'apply button clicked');
     step.done('event flow completed');
   }
@@ -1172,11 +1202,11 @@
       return;
     }
 
-    if (!CONFIG.apply.autoSubmit) {
-      //
-      step.skip('7', 'autoSubmit disabled (test mode)');
-      log.dim('sanitized');
-      log.ok('apply flow completed in test mode');
+    if (!CONFIG.apply.autoSubmit || CONFIG.common.testMode) {
+      const reason = CONFIG.common.testMode ? 'testMode' : 'autoSubmit disabled';
+      step.skip('7', `${reason} (test mode)`);
+      log.ok('⑦ [testMode] 申し込み完了ボタンを検出しました（クリックはスキップ）');
+      log.ok('🎉 テスト成功: すべての処理が正常に完了しました');
       step.done('apply flow completed in test mode');
       return;
     }
@@ -1277,7 +1307,8 @@
           currentStartTimer = setTimeout(() => {
             currentStartTimer = null;
             if (currentAbortController?.signal?.aborted) return;
-            route.run(currentAbortController.signal);
+            log.info(`scheduled time reached — reloading page`);
+            location.reload();
           }, delayMs);
         } else {
           route.run(currentAbortController.signal);
