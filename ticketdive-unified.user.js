@@ -711,9 +711,9 @@
       hidden: o.hidden,
       selected: o.selected,
     }));
-    log.dim('sanitized');
-    console.log('debug');
-    console.log('debug');
+    log.group('📥 セレクトボックス 現在の状態');
+    console.log('要素:', selectEl);
+    console.log('現在値:', selectEl.value);
     console.log('disabled:', selectEl.disabled);
     log.table(options);
     log.groupEnd();
@@ -759,9 +759,9 @@
     }
 
     //
-    log.dim('sanitized');
-    console.log('debug');
-    console.log('debug');
+    log.group('🔘 申し込みボタン 現在の状態');
+    console.log('要素:', btnEl);
+    console.log('テキスト:', btnEl.textContent.trim());
     console.log('disabled:', btnEl.disabled);
     console.log('className:', btnEl.className);
     log.groupEnd();
@@ -769,7 +769,7 @@
     //
     if (btnEl.disabled) {
       step.fail('5', 'apply button is disabled');
-      log.dim('sanitized');
+      log.error('ボタンが disabled のためクリックできません。スクリプトを停止します。');
       return;
     }
 
@@ -910,7 +910,7 @@
       log.dim('__NEXT_DATA__ input candidates: none');
       return;
     }
-    log.dim('sanitized');
+    log.group('📋 __NEXT_DATA__ Input Candidates');
     log.table(candidates);
     log.groupEnd();
   }
@@ -1034,8 +1034,8 @@
     const step = createStepLogger(log, 'apply');
 
     step.start('0', 'apply flow started');
-    log.dim('sanitized');
-    log.dim('sanitized');
+    log.info('スクリプト開始');
+    log.group('⚙️ 設定');
     log.table({
       lastName: CONFIG.apply.lastName,
       firstName: CONFIG.apply.firstName,
@@ -1061,18 +1061,18 @@
     //
     step.start('2', 'select konbini payment radio');
     log.info('info');
-    const konbiniLabel = findRadioLabelByText('コンビニ支払い');
+    const konbiniLabel = findRadioLabelByText('コンビニ決済');
     if (!konbiniLabel) {
       step.fail('2', 'konbini label not found');
       log.error('konbini label not found');
       return;
     }
     const konbiniRadio = konbiniLabel.querySelector('input[type="radio"]');
-    log.dim('sanitized');
-    console.log('debug');
-    console.log('debug');
+    log.group('📻 コンビニ決済ラジオ 現在の状態');
+    console.log('label要素:', konbiniLabel);
+    console.log('input要素:', konbiniRadio);
     console.log('checked:', konbiniRadio?.checked);
-    console.log('debug');
+    console.log('Activeクラスあり:', konbiniLabel.className.includes('containerActive'));
     log.groupEnd();
 
     if (!konbiniRadio?.checked) {
@@ -1137,10 +1137,10 @@
     step.ok('5', `phoneNumber set: ${phoneEl.value}`);
     await sleep(CONFIG.apply.stepDelayMs);
     step.start('6', 'verify final input state');
-    log.dim('sanitized');
+    log.group('✅ 入力完了 最終状態確認');
     log.table({
       konbini: {
-        checked: findRadioLabelByText('コンビニ支払い')?.className?.includes('containerActive'),
+        checked: findRadioLabelByText('コンビニ決済')?.className?.includes('containerActive'),
       },
       lastName: { value: document.querySelector('input[name="lastName"]')?.value },
       firstName: { value: document.querySelector('input[name="firstName"]')?.value },
@@ -1160,8 +1160,8 @@
       return;
     }
 
-    log.dim('sanitized');
-    console.log('debug');
+    log.group('🔘 申し込み完了ボタン 現在の状態');
+    console.log('要素:', submitBtn);
     console.log('disabled:', submitBtn.disabled);
     console.log('className:', submitBtn.className);
     log.groupEnd();
@@ -1196,7 +1196,7 @@
 
   function findButtonByText(text) {
     const buttons = document.querySelectorAll('button[type="button"]');
-    return Array.from(buttons).find(b => b.textContent.trim() === '申し込みを完了する') || null;
+    return Array.from(buttons).find(b => b.textContent.trim() === text) || null;
   }
 
   function clickButton(btn) {
@@ -1208,7 +1208,7 @@
     const timeText = String(startTimeText ?? '').trim();
     if (!timeText) return null;
 
-    const mt = timeText.match(/^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?$/);
+    const mt = timeText.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
     if (!mt) return null;
 
     const h = Number.parseInt(mt[1], 10);
@@ -1218,7 +1218,7 @@
 
     let target;
     if (dateText) {
-      const md = dateText.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+      const md = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (!md) return null;
       const y = Number.parseInt(md[1], 10);
       const m = Number.parseInt(md[2], 10) - 1;
