@@ -17,8 +17,6 @@
     common: {
       timeoutMs: 15000,
       debug: true,
-      startDate: '',
-      startTime: '',
       testMode: false,
     },
     event: {
@@ -240,8 +238,6 @@
   function exportCurrentSettings() {
     return {
       common: {
-        startDate: CONFIG.common.startDate,
-        startTime: CONFIG.common.startTime,
         testMode: CONFIG.common.testMode,
       },
       event: {
@@ -268,20 +264,9 @@
     const applySrc = src.apply && typeof src.apply === 'object' ? src.apply : {};
 
     return {
-      common: (() => {
-        const rawDate = String(commonSrc.startDate ?? '').trim();
-        const rawTime = String(commonSrc.startTime ?? '').trim();
-        const testMode = toBool(commonSrc.testMode, false);
-        const legacy = String(commonSrc.startAt ?? '').trim();
-        if (!legacy) return { startDate: rawDate, startTime: rawTime, testMode };
-        if (rawDate || rawTime) return { startDate: rawDate, startTime: rawTime, testMode };
-        const normalized = legacy.replace('T', ' ').replace(/\//g, '-');
-        const m = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}(?::\d{2})?)$/);
-        if (m) return { startDate: m[1], startTime: m[2], testMode };
-        const t = normalized.match(/^(\d{1,2}:\d{2}(?::\d{2})?)$/);
-        if (t) return { startDate: '', startTime: t[1], testMode };
-        return { startDate: rawDate, startTime: rawTime, testMode };
-      })(),
+      common: {
+        testMode: toBool(commonSrc.testMode, false),
+      },
       event: {
         ticketCount: toInt(eventSrc.ticketCount, 1, 1, 10),
         autoClick: toBool(eventSrc.autoClick, true),
@@ -302,8 +287,6 @@
   function applySettingsToConfig(settings) {
     const normalized = normalizeSettings(settings);
 
-    CONFIG.common.startDate = normalized.common.startDate;
-    CONFIG.common.startTime = normalized.common.startTime;
     CONFIG.common.testMode = normalized.common.testMode;
     CONFIG.event.ticketCount = normalized.event.ticketCount;
     CONFIG.event.autoClick = normalized.event.autoClick;
@@ -460,8 +443,6 @@
     addField('apply.autoSubmit', 'autoSubmit', 'checkbox', inputSection);
     addField('common.testMode', 'testMode (クリック操作を全スキップ)', 'checkbox', inputSection);
 
-    addField('common.startDate', 'startDate (YYYY-MM-DD)', 'date', delaySection);
-    addField('common.startTime', 'startTime (HH:mm:ss)', 'time', delaySection);
     addField('event.waitMs', 'waitMs', 'number', delaySection);
     addField('apply.stepDelayMs', 'stepDelayMs', 'number', delaySection);
 
@@ -600,7 +581,6 @@
   // ============================================================
   let lastHref = location.href;
   let currentAbortController = null;
-  let currentStartTimer = null;
 
   function setupNavigationHook() {
     //
@@ -1233,42 +1213,6 @@
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
   }
 
-  function parseStartDateTimeToDate(startDateText, startTimeText, now = new Date()) {
-    const dateText = String(startDateText ?? '').trim();
-    const timeText = String(startTimeText ?? '').trim();
-    if (!timeText) return null;
-
-    const mt = timeText.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-    if (!mt) return null;
-
-    const h = Number.parseInt(mt[1], 10);
-    const mi = Number.parseInt(mt[2], 10);
-    const s = Number.parseInt(mt[3] ?? '0', 10);
-    if (h > 23 || mi > 59 || s > 59) return null;
-
-    let target;
-    if (dateText) {
-      const md = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!md) return null;
-      const y = Number.parseInt(md[1], 10);
-      const m = Number.parseInt(md[2], 10) - 1;
-      const d = Number.parseInt(md[3], 10);
-      target = new Date(y, m, d, h, mi, s, 0);
-    } else {
-      target = new Date(now.getTime());
-      target.setHours(h, mi, s, 0);
-      if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
-    }
-
-    if (Number.isNaN(target.getTime())) return null;
-    return target;
-  }
-
-  function getStartDelayMs(startDateText, startTimeText) {
-    const target = parseStartDateTimeToDate(startDateText, startTimeText);
-    if (!target) return 0;
-    return Math.max(0, target.getTime() - Date.now());
-  }
 
 // ============================================================
   //
@@ -1290,29 +1234,13 @@
       currentAbortController.abort();
       step.ok('1', 'previous flow aborted');
     }
-    if (currentStartTimer) {
-      clearTimeout(currentStartTimer);
-      currentStartTimer = null;
-    }
     currentAbortController = new AbortController();
 
     for (const route of routes) {
       if (route.test(path)) {
         log.info('info');
         step.ok('1', `route matched: ${path}`);
-        const delayMs = getStartDelayMs(CONFIG.common.startDate, CONFIG.common.startTime);
-        if (delayMs > 0) {
-          step.skip('1', `scheduled start in ${delayMs}ms`);
-          log.warn('start schedule active: waiting ' + delayMs + 'ms until ' + CONFIG.common.startDate + ' ' + CONFIG.common.startTime);
-          currentStartTimer = setTimeout(() => {
-            currentStartTimer = null;
-            if (currentAbortController?.signal?.aborted) return;
-            log.info(`scheduled time reached — reloading page`);
-            location.reload();
-          }, delayMs);
-        } else {
-          route.run(currentAbortController.signal);
-        }
+        route.run(currentAbortController.signal);
         return;
       }
     }
